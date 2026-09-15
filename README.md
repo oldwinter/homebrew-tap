@@ -6,31 +6,35 @@ Personal Homebrew tap for `oldwinter` CLI tools.
 
 ```bash
 brew tap oldwinter/tap
+brew install oldwinter/tap/all-cli
+all-cli --help
+```
+
+`oldwinter-hello` is the tap-validation demo, not the first product command:
+
+```bash
 brew install oldwinter/tap/oldwinter-hello
 oldwinter-hello --version
 ```
 
-For the new CLI:
-
-```bash
-brew install oldwinter/tap/oldwinter-greet
-oldwinter-greet codex
-```
-
-Install the cask variant:
-
-```bash
-brew install --cask oldwinter/tap/oldwinter-greet
-oldwinter-greet --version
-```
-
 ## Included Formulae
 
-- `oldwinter-hello`: Demo CLI used to validate this tap setup.
-- `oldwinter-greet`: Greeting CLI with both formula and cask installation options.
+- `oldwinter/tap/all-cli`: inspect and manage common CLI tool contexts
+- `oldwinter/tap/golang-cli`: LLM-friendly Go CLI toolkit
+- `oldwinter/tap/oldwinter-hello`: tap-validation demo CLI
+- `oldwinter/tap/oldwinter-greet`: greeting CLI (`brew install oldwinter/tap/oldwinter-greet`)
 
-To install the latest development version, use:
+## Included Casks
+
+- `--cask oldwinter/tap/nekong`: local-first Electron AI agent desktop app (`brew install --cask oldwinter/tap/nekong`)
+- `--cask oldwinter/tap/oldwinter-greet`: greeting CLI cask variant (`brew install --cask oldwinter/tap/oldwinter-greet`)
+
+`oldwinter-greet` ships as both a formula and a cask. Prefer the formula unless you specifically want the cask.
+
+To install the latest development version of the demo:
 
 ```bash
 brew install --HEAD oldwinter/tap/oldwinter-hello
 ```
+
+Catalog coverage is checked by `scripts/check-tap-catalog`.
