@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# Lock the post-install next step on the Nekong cask.
+set -euo pipefail
+
+root="$(cd "$(dirname "$0")/.." && pwd)"
+
+fail() {
+  echo "test-nekong-caveats: $1" >&2
+  exit 1
+}
+
+has_post_install_next_step() {
+  local text
+  text="$(<"$1")"
+  [[ "$text" == *"caveats"* ]] || return 1
+  [[ "$text" == *"open -a Nekong"* ]] || return 1
+  [[ "$text" == *"Language"* && "$text" == *"Provider"* && "$text" == *"First workspace"* ]] || return 1
+  [[ "$text" == *"Control-click"* && "$text" == *"Open"* ]] || return 1
+  return 0
+}
+
+has_post_install_next_step "$root/Casks/nekong.rb" \
+  || fail "live Nekong cask must print open -a Nekong, first-launch steps, and Control-click Open"
+
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
+printf '%s\n' 'cask "nekong" do' '  app "Nekong.app"' 'end' >"$tmp/nekong.rb"
+if has_post_install_next_step "$tmp/nekong.rb"; then
+  fail "cask without caveats should fail"
+fi
+
+echo "test-nekong-caveats: ok"
