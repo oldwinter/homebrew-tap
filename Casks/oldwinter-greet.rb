@@ -7,5 +7,14 @@ cask "oldwinter-greet" do
   desc "Simple greeting CLI for oldwinter"
   homepage "https://github.com/oldwinter/homebrew-tap"
 
+  conflicts_with formula: "oldwinter-greet"
+
   binary "homebrew-tap-#{version}/scripts/oldwinter-greet"
+
+  caveats <<~EOS
+    The formula is the default CLI path:
+      brew install oldwinter/tap/oldwinter-greet
+
+    This cask and the formula both install the same binary.
+  EOS
 end

@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+# Lock formula/cask mutual exclusion on oldwinter-greet.
+set -euo pipefail
+
+root="$(cd "$(dirname "$0")/.." && pwd)"
+
+fail() {
+  echo "test-greet-conflicts: $1" >&2
+  exit 1
+}
+
+formula_declares_cask_conflict() {
+  local text
+  text="$(<"$1")"
+  [[ "$text" == *'conflicts_with cask: "oldwinter-greet"'* ]] || return 1
+  [[ "$text" == *"def caveats"* ]] || return 1
+  [[ "$text" == *"brew install --cask oldwinter/tap/oldwinter-greet"* ]] || return 1
+  return 0
+}
+
+cask_declares_formula_conflict() {
+  local text
+  text="$(<"$1")"
+  [[ "$text" == *'conflicts_with formula: "oldwinter-greet"'* ]] || return 1
+  [[ "$text" == *"caveats"* ]] || return 1
+  [[ "$text" == *"default CLI path"* ]] || return 1
+  [[ "$text" == *"brew install oldwinter/tap/oldwinter-greet"* ]] || return 1
+  [[ "$text" != *"brew install --cask oldwinter/tap/oldwinter-greet"* ]] || return 1
+  return 0
+}
+
+formula_declares_cask_conflict "$root/Formula/oldwinter-greet.rb" \
+  || fail "live formula must conflict with the cask and print the cask install command"
+
+cask_declares_formula_conflict "$root/Casks/oldwinter-greet.rb" \
+  || fail "live cask must conflict with the formula and name it as the default CLI path"
+
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
+
+printf '%s\n' \
+  'class OldwinterGreet < Formula' \
+  '  desc "Simple greeting CLI for oldwinter"' \
+  '  def install' \
+  '    bin.install "scripts/oldwinter-greet"' \
+  '  end' \
+  'end' >"$tmp/oldwinter-greet.rb"
+if formula_declares_cask_conflict "$tmp/oldwinter-greet.rb"; then
+  fail "formula without conflicts_with or caveats should fail"
+fi
+
+printf '%s\n' \
+  'cask "oldwinter-greet" do' \
+  '  version "0.2.0"' \
+  '  binary "scripts/oldwinter-greet"' \
+  'end' >"$tmp/oldwinter-greet-cask.rb"
+if cask_declares_formula_conflict "$tmp/oldwinter-greet-cask.rb"; then
+  fail "cask without conflicts_with or caveats should fail"
+fi
+
+echo "test-greet-conflicts: ok"
