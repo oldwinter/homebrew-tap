@@ -13,5 +13,7 @@ class OldwinterGreet < Formula
   test do
     assert_match "0.2.0", shell_output("#{bin}/oldwinter-greet --version")
     assert_match "Hi, codex!", shell_output("#{bin}/oldwinter-greet codex")
+    json = shell_output("#{bin}/oldwinter-greet --json codex")
+    assert_match '"message":"Hi, codex!"', json
   end
 end
