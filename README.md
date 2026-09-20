@@ -26,8 +26,14 @@ oldwinter-greet --version
 
 ## Included Formulae
 
+- `all-cli`: Inspect and manage common CLI tool contexts (GoReleaser-managed).
 - `oldwinter-hello`: Demo CLI used to validate this tap setup.
 - `oldwinter-greet`: Greeting CLI with both formula and cask installation options.
+
+## Included Casks
+
+- `nekong`: Local-first Electron AI agent desktop app (Apple Silicon DMG).
+- `oldwinter-greet`: Cask variant of the greeting CLI.
 
 To install the latest development version, use:
 
