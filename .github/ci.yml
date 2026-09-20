@@ -1,0 +1,17 @@
+# Intended GitHub Actions workflow. Enable by copying to .github/workflows/ci.yml
+# if the GitHub token can write workflow files.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Ruby syntax check
+        run: |
+          for f in Formula/*.rb Casks/*.rb; do ruby -c "$f"; done
