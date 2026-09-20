@@ -50,7 +50,12 @@ name="${*:-friend}"
 message="Hi, ${name}!"
 
 if [[ "${as_json}" == "true" ]]; then
-  printf '{"tool":"oldwinter-greet","version":"%s","message":"%s"}\n' "${VERSION}" "${message}"
+  escaped="${message//\\/\\\\}"
+  escaped="${escaped//\"/\\\"}"
+  escaped="${escaped//$'\n'/\\n}"
+  escaped="${escaped//$'\t'/\\t}"
+  escaped="${escaped//$'\r'/\\r}"
+  printf '{"tool":"oldwinter-greet","version":"%s","message":"%s"}\n' "${VERSION}" "${escaped}"
 else
   echo "${message}"
 fi
