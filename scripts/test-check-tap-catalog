@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# Fixture tests for scripts/check-tap-catalog.
+set -euo pipefail
+
+root="$(cd "$(dirname "$0")/.." && pwd)"
+check="$root/scripts/check-tap-catalog"
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
+
+fail() {
+  echo "test-check-tap-catalog: $1" >&2
+  exit 1
+}
+
+"$check" >/dev/null || fail "live tap README should satisfy the catalog check"
+
+fixture="$tmp/tap"
+mkdir -p "$fixture/Formula" "$fixture/Casks" "$fixture/scripts"
+cp "$check" "$fixture/scripts/check-tap-catalog"
+chmod +x "$fixture/scripts/check-tap-catalog"
+printf '%s\n' 'class Demo < Formula' >"$fixture/Formula/demo.rb"
+printf '%s\n' 'cask "app" do' >"$fixture/Casks/app.rb"
+printf '%s\n' '# empty catalog' >"$fixture/README.md"
+
+if "$fixture/scripts/check-tap-catalog" >/dev/null 2>"$tmp/empty.err"; then
+  fail "empty README should fail"
+fi
+grep -q -e 'oldwinter/tap/demo' "$tmp/empty.err" || fail "empty README should name missing formula"
+grep -q -e '--cask oldwinter/tap/app' "$tmp/empty.err" || fail "empty README should name missing cask"
+
+cat >"$fixture/README.md" <<'EOF'
+Install `oldwinter/tap/demo` or `brew install --cask oldwinter/tap/app`.
+EOF
+
+"$fixture/scripts/check-tap-catalog" >/dev/null || fail "complete README fixture should pass"
+
+echo "test-check-tap-catalog: ok"
