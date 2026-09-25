@@ -11,6 +11,16 @@ cask "nekong" do
 
   app "Nekong.app"
 
+  caveats <<~EOS
+    Open the installed app with:
+      open -a Nekong
+
+    First launch walks through Language, Provider, and First workspace.
+
+    This package is not notarized. If Gatekeeper blocks the first start,
+    Control-click Nekong.app and choose Open.
+  EOS
+
   zap trash: [
     "~/Library/Application Support/Nekong",
     "~/Library/Logs/Nekong",
