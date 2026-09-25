@@ -6,8 +6,19 @@ class OldwinterGreet < Formula
   head "https://github.com/oldwinter/homebrew-tap.git", branch: "main"
   license "MIT"
 
+  conflicts_with cask: "oldwinter-greet",
+                 because: "both install the oldwinter-greet binary"
+
   def install
     bin.install "scripts/oldwinter-greet"
+  end
+
+  def caveats
+    <<~EOS
+      This formula and the oldwinter-greet cask both install the same binary.
+      To install the cask instead:
+        brew install --cask oldwinter/tap/oldwinter-greet
+    EOS
   end
 
   test do
