@@ -30,7 +30,7 @@ json_escape() {
       $'\t') escaped+='\t' ;;
       *)
         printf -v code '%d' "'${ch}"
-        if ((code < 32)); then
+        if ((code >= 0 && code < 32)); then
           printf -v ch '\\u%04x' "${code}"
         fi
         escaped+="${ch}"
