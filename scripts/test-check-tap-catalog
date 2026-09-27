@@ -20,18 +20,132 @@ cp "$check" "$fixture/scripts/check-tap-catalog"
 chmod +x "$fixture/scripts/check-tap-catalog"
 printf '%s\n' 'class Demo < Formula' >"$fixture/Formula/demo.rb"
 printf '%s\n' 'cask "app" do' >"$fixture/Casks/app.rb"
-printf '%s\n' '# empty catalog' >"$fixture/README.md"
 
-if "$fixture/scripts/check-tap-catalog" >/dev/null 2>"$tmp/empty.err"; then
-  fail "empty README should fail"
-fi
-grep -q -e 'oldwinter/tap/demo' "$tmp/empty.err" || fail "empty README should name missing formula"
-grep -q -e '--cask oldwinter/tap/app' "$tmp/empty.err" || fail "empty README should name missing cask"
+formula_entry='- `oldwinter/tap/demo`: demo CLI'
+cask_entry='- `--cask oldwinter/tap/app`: demo app'
 
-cat >"$fixture/README.md" <<'EOF'
-Install `oldwinter/tap/demo` or `brew install --cask oldwinter/tap/app`.
+write_readme() {
+  cat >"$fixture/README.md" <<EOF
+# Fixture tap
+
+## Install
+
+Install \`oldwinter/tap/demo\` or \`brew install --cask oldwinter/tap/app\`.
+
+## Included Formulae
+
+$1
+
+## Included Casks
+
+$2
 EOF
+}
 
+expect_failure() {
+  local description="$1" diagnostic
+  shift
+  if "$fixture/scripts/check-tap-catalog" >"$tmp/out" 2>"$tmp/err"; then
+    fail "$description should fail"
+  fi
+  for diagnostic in "$@"; do
+    grep -Fq -- "$diagnostic" "$tmp/err" \
+      || fail "$description should report: $diagnostic"
+  done
+}
+
+write_readme "$formula_entry" "$cask_entry"
 "$fixture/scripts/check-tap-catalog" >/dev/null || fail "complete README fixture should pass"
+
+write_readme '' "$cask_entry"
+expect_failure 'missing formula listing with surviving install example' \
+  'Included Formulae missing formula: oldwinter/tap/demo'
+
+write_readme "$formula_entry" ''
+expect_failure 'missing cask listing with surviving install example' \
+  'Included Casks missing cask: --cask oldwinter/tap/app'
+
+write_readme "$cask_entry" "$formula_entry"
+expect_failure 'listings in the wrong sections' \
+  'Included Formulae missing formula: oldwinter/tap/demo' \
+  'Included Casks missing cask: --cask oldwinter/tap/app'
+
+write_readme '- `oldwinter/tap/demo-extra`: different formula' "$cask_entry"
+expect_failure 'formula prefix collision' \
+  'Included Formulae missing formula: oldwinter/tap/demo' \
+  'Included Formulae stale formula: oldwinter/tap/demo-extra'
+
+write_readme "$formula_entry" '- `--cask oldwinter/tap/app-extra`: different cask'
+expect_failure 'cask prefix collision' \
+  'Included Casks missing cask: --cask oldwinter/tap/app' \
+  'Included Casks stale cask: --cask oldwinter/tap/app-extra'
+
+mv "$fixture/Casks/app.rb" "$fixture/Casks/demo.rb"
+write_readme '' '- `--cask oldwinter/tap/demo`: same-named cask'
+expect_failure 'same-named cask without a formula listing' \
+  'Included Formulae missing formula: oldwinter/tap/demo'
+write_readme "$formula_entry" ''
+expect_failure 'same-named formula without a cask listing' \
+  'Included Casks missing cask: --cask oldwinter/tap/demo'
+write_readme "$formula_entry" '- `--cask oldwinter/tap/demo`: same-named cask'
+"$fixture/scripts/check-tap-catalog" >/dev/null || fail "separate same-named listings should pass"
+mv "$fixture/Casks/demo.rb" "$fixture/Casks/app.rb"
+
+write_readme "$formula_entry" "$cask_entry"
+mv "$fixture/Formula/demo.rb" "$tmp/demo.rb"
+expect_failure 'deleted formula still listed' \
+  'Included Formulae stale formula: oldwinter/tap/demo'
+mv "$tmp/demo.rb" "$fixture/Formula/demo.rb"
+mv "$fixture/Casks/app.rb" "$tmp/app.rb"
+expect_failure 'deleted cask still listed' \
+  'Included Casks stale cask: --cask oldwinter/tap/app'
+mv "$tmp/app.rb" "$fixture/Casks/app.rb"
+
+# A later section and fenced examples must not count as Included entries.
+write_readme '' ''
+cat >>"$fixture/README.md" <<EOF
+
+\`\`\`markdown
+$cask_entry
+\`\`\`
+
+## Examples
+
+$formula_entry
+$cask_entry
+EOF
+expect_failure 'listings outside Included sections or inside code fences' \
+  'Included Formulae missing formula: oldwinter/tap/demo' \
+  'Included Casks missing cask: --cask oldwinter/tap/app'
+
+printf '%s\n' '# empty catalog' >"$fixture/README.md"
+expect_failure 'empty README' \
+  'Included Formulae missing formula: oldwinter/tap/demo' \
+  'Included Casks missing cask: --cask oldwinter/tap/app'
+
+rm "$fixture/README.md"
+expect_failure 'missing README' 'missing README.md'
+
+write_readme "$formula_entry" "$cask_entry"
+for directory in Formula Casks; do
+  mv "$fixture/$directory" "$tmp/$directory"
+  expect_failure "missing $directory directory" "cannot enumerate $directory/"
+  touch "$fixture/$directory"
+  expect_failure "$directory is not a directory" "cannot enumerate $directory/"
+  rm "$fixture/$directory"
+  mv "$tmp/$directory" "$fixture/$directory"
+done
+
+# Fail after yielding entries to ensure partial enumeration cannot pass.
+mkdir -p "$tmp/bin"
+cat >"$tmp/bin/find" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\0' "$1"/*.rb
+echo 'forced find failure' >&2
+exit 1
+EOF
+chmod +x "$tmp/bin/find"
+PATH="$tmp/bin:$PATH" expect_failure 'failed directory enumeration' \
+  'cannot enumerate Formula/'
 
 echo "test-check-tap-catalog: ok"

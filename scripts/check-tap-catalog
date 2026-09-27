@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Verify README lists every Formula and Cask in this tap.
+# Verify README Included lists exactly match the Formula and Cask catalog.
 set -euo pipefail
+export LC_ALL=C
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
 readme="$root/README.md"
@@ -10,29 +11,68 @@ if [[ ! -f "$readme" ]]; then
   exit 1
 fi
 
-readme_text="$(<"$readme")"
-missing=0
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
+mismatch=0
 
-while IFS= read -r -d '' formula; do
-  name="$(basename "$formula" .rb)"
-  needle="oldwinter/tap/${name}"
-  if [[ "$readme_text" != *"$needle"* ]]; then
-    echo "check-tap-catalog: README missing formula install: ${needle}" >&2
-    missing=1
+for kind in formula cask; do
+  if [[ "$kind" == formula ]]; then
+    directory=Formula
+    section='Included Formulae'
+    prefix='oldwinter/tap/'
+  else
+    directory=Casks
+    section='Included Casks'
+    prefix='--cask oldwinter/tap/'
   fi
-done < <(find "$root/Formula" -maxdepth 1 -type f -name '*.rb' -print0 | sort -z)
 
-while IFS= read -r -d '' cask; do
-  name="$(basename "$cask" .rb)"
-  needle="--cask oldwinter/tap/${name}"
-  if [[ "$readme_text" != *"$needle"* ]]; then
-    echo "check-tap-catalog: README missing cask install: ${needle}" >&2
-    missing=1
+  # Capture find directly so missing directories and partial failures are fatal.
+  if [[ ! -d "$root/$directory" ]] \
+    || ! find "$root/$directory" -maxdepth 1 -type f -name '*.rb' -print0 >"$tmp/entries"; then
+    echo "check-tap-catalog: cannot enumerate $directory/" >&2
+    exit 1
   fi
-done < <(find "$root/Casks" -maxdepth 1 -type f -name '*.rb' -print0 | sort -z)
+  while IFS= read -r -d '' entry; do
+    name="${entry##*/}"
+    printf '%s%s\n' "$prefix" "${name%.rb}"
+  done <"$tmp/entries" | sort -u >"$tmp/actual"
 
-if [[ "$missing" -ne 0 ]]; then
+  # Only the leading code token of a list item in this section is a listing.
+  awk -v heading="## $section" -v prefix="$prefix" '
+    /^[[:space:]]*(```|~~~)/ {
+      marker = $0
+      sub(/^[[:space:]]*/, "", marker)
+      marker = substr(marker, 1, 3)
+      if (fence == "") fence = marker
+      else if (fence == marker) fence = ""
+      next
+    }
+    fence != "" { next }
+    /^##?[[:space:]]/ {
+      section = $0
+      sub(/[[:space:]]+$/, "", section)
+    }
+    section == heading && /^[[:space:]]*[-*+][[:space:]]+`/ {
+      split($0, parts, "`")
+      token = parts[2]
+      if (index(token, prefix) != 1) next
+      name = substr(token, length(prefix) + 1)
+      if (name ~ /^[[:alnum:]@+_.-]+$/) print token
+    }
+  ' "$readme" | sort -u >"$tmp/listed"
+
+  comm -23 "$tmp/actual" "$tmp/listed" >"$tmp/missing"
+  comm -13 "$tmp/actual" "$tmp/listed" >"$tmp/stale"
+  for problem in missing stale; do
+    while IFS= read -r token; do
+      echo "check-tap-catalog: README $section $problem $kind: $token" >&2
+      mismatch=1
+    done <"$tmp/$problem"
+  done
+done
+
+if [[ "$mismatch" -ne 0 ]]; then
   exit 1
 fi
 
-echo "check-tap-catalog: README covers every Formula/ and Casks/ entry."
+echo "check-tap-catalog: README Included lists exactly match Formula/ and Casks/."
