@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+resolve_script_path() {
+  local source="${BASH_SOURCE[0]}" directory target
+  while [[ -L "$source" ]]; do
+    directory="$(cd -P "$(dirname "$source")" && pwd)"
+    target="$(readlink "$source")"
+    [[ "$target" == /* ]] && source="$target" || source="$directory/$target"
+  done
+  printf '%s\n' "$source"
+}
+root="$(cd -P "$(dirname "$(resolve_script_path)")/.." && pwd)"
+
+"$root/scripts/check-tap-catalog"
+for test_script in \
+  test-check-tap-catalog \
+  test-greet-conflicts \
+  test-greet-json \
+  test-hello-cli \
+  test-nekong-caveats \
+  test-symlink-roots; do
+  "$root/scripts/$test_script"
+done
+
+for script in "$root"/scripts/*; do
+  bash -n "$script"
+done
+for ruby_file in "$root"/Formula/*.rb "$root"/Casks/*.rb; do
+  ruby -c "$ruby_file" >/dev/null
+done
+
+echo "test-all: ok"

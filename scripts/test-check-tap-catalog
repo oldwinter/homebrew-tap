@@ -2,7 +2,16 @@
 # Fixture tests for scripts/check-tap-catalog.
 set -euo pipefail
 
-root="$(cd "$(dirname "$0")/.." && pwd)"
+resolve_script_path() {
+  local source="${BASH_SOURCE[0]}" directory target
+  while [[ -L "$source" ]]; do
+    directory="$(cd -P "$(dirname "$source")" && pwd)"
+    target="$(readlink "$source")"
+    [[ "$target" == /* ]] && source="$target" || source="$directory/$target"
+  done
+  printf '%s\n' "$source"
+}
+root="$(cd -P "$(dirname "$(resolve_script_path)")/.." && pwd)"
 check="$root/scripts/check-tap-catalog"
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
@@ -57,6 +66,16 @@ expect_failure() {
 write_readme "$formula_entry" "$cask_entry"
 "$fixture/scripts/check-tap-catalog" >/dev/null || fail "complete README fixture should pass"
 
+write_readme "$formula_entry
+$formula_entry" "$cask_entry"
+expect_failure 'duplicate formula listing' \
+  'Included Formulae duplicate formula: oldwinter/tap/demo'
+
+write_readme "$formula_entry" "$cask_entry
+$cask_entry"
+expect_failure 'duplicate cask listing' \
+  'Included Casks duplicate cask: --cask oldwinter/tap/app'
+
 write_readme '' "$cask_entry"
 expect_failure 'missing formula listing with surviving install example' \
   'Included Formulae missing formula: oldwinter/tap/demo'
@@ -81,6 +100,7 @@ expect_failure 'cask prefix collision' \
   'Included Casks stale cask: --cask oldwinter/tap/app-extra'
 
 mv "$fixture/Casks/app.rb" "$fixture/Casks/demo.rb"
+printf '%s\n' 'cask "demo" do' >"$fixture/Casks/demo.rb"
 write_readme '' '- `--cask oldwinter/tap/demo`: same-named cask'
 expect_failure 'same-named cask without a formula listing' \
   'Included Formulae missing formula: oldwinter/tap/demo'
@@ -90,6 +110,7 @@ expect_failure 'same-named formula without a cask listing' \
 write_readme "$formula_entry" '- `--cask oldwinter/tap/demo`: same-named cask'
 "$fixture/scripts/check-tap-catalog" >/dev/null || fail "separate same-named listings should pass"
 mv "$fixture/Casks/demo.rb" "$fixture/Casks/app.rb"
+printf '%s\n' 'cask "app" do' >"$fixture/Casks/app.rb"
 
 write_readme "$formula_entry" "$cask_entry"
 mv "$fixture/Formula/demo.rb" "$tmp/demo.rb"
@@ -117,6 +138,39 @@ EOF
 expect_failure 'listings outside Included sections or inside code fences' \
   'Included Formulae missing formula: oldwinter/tap/demo' \
   'Included Casks missing cask: --cask oldwinter/tap/app'
+
+cat >"$fixture/README.md" <<EOF
+# Fixture tap
+
+## Included Formulae
+
+\`\`\`\`markdown
+\`\`\`
+$formula_entry
+\`\`\`\`
+
+## Included Casks
+
+$cask_entry
+EOF
+expect_failure 'formula listing inside a four-backtick fence' \
+  'Included Formulae missing formula: oldwinter/tap/demo'
+
+write_readme "$formula_entry" "$cask_entry"
+printf '%s\n' 'class Other < Formula' >"$fixture/Formula/demo.rb"
+expect_failure 'formula declaration mismatch' \
+  'Formula/demo.rb must declare exactly Demo'
+printf '%s\n' 'class Demo < Formula' >"$fixture/Formula/demo.rb"
+printf '%s\n' 'cask "other" do' >"$fixture/Casks/app.rb"
+expect_failure 'cask declaration mismatch' \
+  'Casks/app.rb must declare exactly app'
+printf '%s\n' 'cask "app" do' >"$fixture/Casks/app.rb"
+
+printf '%s\n' '#!/usr/bin/env bash' 'echo demo' >"$fixture/scripts/demo"
+chmod 0644 "$fixture/scripts/demo"
+expect_failure 'non-executable shebang script' \
+  'shebang script is not executable: scripts/demo'
+rm "$fixture/scripts/demo"
 
 printf '%s\n' '# empty catalog' >"$fixture/README.md"
 expect_failure 'empty README' \
@@ -147,5 +201,10 @@ EOF
 chmod +x "$tmp/bin/find"
 PATH="$tmp/bin:$PATH" expect_failure 'failed directory enumeration' \
   'cannot enumerate Formula/'
+
+mkdir -p "$tmp/links"
+ln -s "$check" "$tmp/links/check-tap-catalog"
+"$tmp/links/check-tap-catalog" >/dev/null \
+  || fail "symlink invocation should validate the source repository"
 
 echo "test-check-tap-catalog: ok"

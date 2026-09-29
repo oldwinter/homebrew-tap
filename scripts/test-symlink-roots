@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+resolve_script_path() {
+  local source="${BASH_SOURCE[0]}" directory target
+  while [[ -L "$source" ]]; do
+    directory="$(cd -P "$(dirname "$source")" && pwd)"
+    target="$(readlink "$source")"
+    [[ "$target" == /* ]] && source="$target" || source="$directory/$target"
+  done
+  printf '%s\n' "$source"
+}
+root="$(cd -P "$(dirname "$(resolve_script_path)")/.." && pwd)"
+tmp="$(mktemp -d)"
+relative_tmp="$(mktemp -d "$root/.symlink-test.XXXXXX")"
+trap 'rm -rf "$tmp" "$relative_tmp"' EXIT
+
+for name in check-tap-catalog test-greet-conflicts test-greet-json test-hello-cli test-nekong-caveats; do
+  ln -s "$root/scripts/$name" "$tmp/$name"
+  "$tmp/$name" >/dev/null
+  ln -s "../scripts/$name" "$relative_tmp/$name"
+  "$relative_tmp/$name" >/dev/null
+done
+
+echo "test-symlink-roots: ok"

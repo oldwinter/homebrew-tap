@@ -2,7 +2,16 @@
 # Round-trip scripts/oldwinter-greet --json output through a stdlib JSON parser.
 set -euo pipefail
 
-root="$(cd "$(dirname "$0")/.." && pwd)"
+resolve_script_path() {
+  local source="${BASH_SOURCE[0]}" directory target
+  while [[ -L "$source" ]]; do
+    directory="$(cd -P "$(dirname "$source")" && pwd)"
+    target="$(readlink "$source")"
+    [[ "$target" == /* ]] && source="$target" || source="$directory/$target"
+  done
+  printf '%s\n' "$source"
+}
+root="$(cd -P "$(dirname "$(resolve_script_path)")/.." && pwd)"
 greet="$root/scripts/oldwinter-greet"
 
 fail() {

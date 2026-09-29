@@ -20,7 +20,6 @@ oldwinter-hello --version
 ## Included Formulae
 
 - `oldwinter/tap/all-cli`: inspect and manage common CLI tool contexts
-- `oldwinter/tap/golang-cli`: LLM-friendly Go CLI toolkit
 - `oldwinter/tap/oldwinter-hello`: tap-validation demo CLI
 - `oldwinter/tap/oldwinter-greet`: greeting CLI (`brew install oldwinter/tap/oldwinter-greet`)
 
@@ -38,3 +37,4 @@ brew install --HEAD oldwinter/tap/oldwinter-hello
 ```
 
 Catalog coverage is checked by `scripts/check-tap-catalog`.
+Run the complete repository contract with `scripts/test-all`.
