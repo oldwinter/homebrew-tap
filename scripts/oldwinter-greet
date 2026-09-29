@@ -55,7 +55,7 @@ while [[ $# -gt 0 ]]; do
     --json)
       as_json=true
       shift
-      break
+      continue
       ;;
     --)
       shift
