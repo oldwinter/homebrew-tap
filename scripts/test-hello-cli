@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+resolve_script_path() {
+  local source="${BASH_SOURCE[0]}" directory target
+  while [[ -L "$source" ]]; do
+    directory="$(cd -P "$(dirname "$source")" && pwd)"
+    target="$(readlink "$source")"
+    [[ "$target" == /* ]] && source="$target" || source="$directory/$target"
+  done
+  printf '%s\n' "$source"
+}
+root="$(cd -P "$(dirname "$(resolve_script_path)")/.." && pwd)"
+hello="$root/scripts/oldwinter-hello"
+
+fail() {
+  echo "test-hello-cli: $1" >&2
+  exit 1
+}
+
+[[ "$("$hello")" == "Hello from oldwinter Homebrew tap!" ]] \
+  || fail "default greeting changed"
+[[ "$("$hello" Ada Lovelace)" == "Hello, Ada Lovelace!" ]] \
+  || fail "positional greeting changed"
+[[ "$("$hello" -- -Ada)" == "Hello, -Ada!" ]] \
+  || fail "-- must protect dash-prefixed names"
+[[ "$("$hello" --version)" == "0.1.0" ]] \
+  || fail "--version changed"
+
+for args in '--bogus' '--version extra' '--help extra'; do
+  read -r -a words <<<"$args"
+  if "$hello" "${words[@]}" >/dev/null 2>&1; then
+    fail "$args should fail"
+  fi
+done
+
+echo "test-hello-cli: ok"

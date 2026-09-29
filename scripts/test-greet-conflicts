@@ -2,7 +2,16 @@
 # Lock formula/cask mutual exclusion on oldwinter-greet.
 set -euo pipefail
 
-root="$(cd "$(dirname "$0")/.." && pwd)"
+resolve_script_path() {
+  local source="${BASH_SOURCE[0]}" directory target
+  while [[ -L "$source" ]]; do
+    directory="$(cd -P "$(dirname "$source")" && pwd)"
+    target="$(readlink "$source")"
+    [[ "$target" == /* ]] && source="$target" || source="$directory/$target"
+  done
+  printf '%s\n' "$source"
+}
+root="$(cd -P "$(dirname "$(resolve_script_path)")/.." && pwd)"
 
 fail() {
   echo "test-greet-conflicts: $1" >&2
@@ -11,7 +20,7 @@ fail() {
 
 formula_declares_cask_conflict() {
   local text
-  text="$(<"$1")"
+  text="$(sed '/^[[:space:]]*#/d' "$1")"
   [[ "$text" == *'conflicts_with cask: "oldwinter-greet"'* ]] || return 1
   [[ "$text" == *"def caveats"* ]] || return 1
   [[ "$text" == *"brew install --cask oldwinter/tap/oldwinter-greet"* ]] || return 1
@@ -20,7 +29,7 @@ formula_declares_cask_conflict() {
 
 cask_declares_formula_conflict() {
   local text
-  text="$(<"$1")"
+  text="$(sed '/^[[:space:]]*#/d' "$1")"
   [[ "$text" == *'conflicts_with formula: "oldwinter-greet"'* ]] || return 1
   [[ "$text" == *"caveats"* ]] || return 1
   [[ "$text" == *"default CLI path"* ]] || return 1
@@ -48,6 +57,15 @@ printf '%s\n' \
 if formula_declares_cask_conflict "$tmp/oldwinter-greet.rb"; then
   fail "formula without conflicts_with or caveats should fail"
 fi
+printf '%s\n' \
+  'class OldwinterGreet < Formula' \
+  '  # conflicts_with cask: "oldwinter-greet"' \
+  '  # def caveats' \
+  '  # brew install --cask oldwinter/tap/oldwinter-greet' \
+  'end' >"$tmp/oldwinter-greet.rb"
+if formula_declares_cask_conflict "$tmp/oldwinter-greet.rb"; then
+  fail "comment-only formula policy should fail"
+fi
 
 printf '%s\n' \
   'cask "oldwinter-greet" do' \
@@ -56,6 +74,16 @@ printf '%s\n' \
   'end' >"$tmp/oldwinter-greet-cask.rb"
 if cask_declares_formula_conflict "$tmp/oldwinter-greet-cask.rb"; then
   fail "cask without conflicts_with or caveats should fail"
+fi
+printf '%s\n' \
+  'cask "oldwinter-greet" do' \
+  '  # conflicts_with formula: "oldwinter-greet"' \
+  '  # caveats' \
+  '  # default CLI path' \
+  '  # brew install oldwinter/tap/oldwinter-greet' \
+  'end' >"$tmp/oldwinter-greet-cask.rb"
+if cask_declares_formula_conflict "$tmp/oldwinter-greet-cask.rb"; then
+  fail "comment-only cask policy should fail"
 fi
 
 echo "test-greet-conflicts: ok"

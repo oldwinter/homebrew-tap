@@ -3,7 +3,22 @@
 set -euo pipefail
 export LC_ALL=C
 
-root="$(cd "$(dirname "$0")/.." && pwd)"
+resolve_script_path() {
+  local source="${BASH_SOURCE[0]}" directory target
+  while [[ -L "$source" ]]; do
+    directory="$(cd -P "$(dirname "$source")" && pwd)"
+    target="$(readlink "$source")"
+    if [[ "$target" == /* ]]; then
+      source="$target"
+    else
+      source="$directory/$target"
+    fi
+  done
+  printf '%s\n' "$source"
+}
+
+script_path="$(resolve_script_path)"
+root="$(cd -P "$(dirname "$script_path")/.." && pwd)"
 readme="$root/README.md"
 
 if [[ ! -f "$readme" ]]; then
@@ -14,6 +29,29 @@ fi
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 mismatch=0
+
+while IFS= read -r -d '' script; do
+  if IFS= read -r first_line <"$script" \
+    && [[ "$first_line" == '#!'* ]] \
+    && [[ ! -x "$script" ]]; then
+    echo "check-tap-catalog: shebang script is not executable: ${script#"$root/"}" >&2
+    mismatch=1
+  fi
+done < <(find "$root/scripts" -maxdepth 1 -type f -print0)
+
+formula_class_for() {
+  local name="$1" part first result=""
+  local parts
+  IFS='-' read -r -a parts <<<"$name"
+  for part in "${parts[@]}"; do
+    if [[ ! "$part" =~ ^[a-z0-9]+$ ]]; then
+      return 1
+    fi
+    first="$(printf '%s' "${part:0:1}" | tr '[:lower:]' '[:upper:]')"
+    result+="$first${part:1}"
+  done
+  printf '%s\n' "$result"
+}
 
 for kind in formula cask; do
   if [[ "$kind" == formula ]]; then
@@ -32,22 +70,65 @@ for kind in formula cask; do
     echo "check-tap-catalog: cannot enumerate $directory/" >&2
     exit 1
   fi
+  : >"$tmp/actual.raw"
   while IFS= read -r -d '' entry; do
     name="${entry##*/}"
-    printf '%s%s\n' "$prefix" "${name%.rb}"
-  done <"$tmp/entries" | sort -u >"$tmp/actual"
+    name="${name%.rb}"
+    if [[ "$kind" == formula ]]; then
+      expected="$(formula_class_for "$name")" || {
+        echo "check-tap-catalog: unsupported formula filename: $name.rb" >&2
+        mismatch=1
+        continue
+      }
+      declarations="$(
+        sed -nE 's/^[[:space:]]*class[[:space:]]+([A-Za-z][A-Za-z0-9_]*)[[:space:]]*<[[:space:]]*Formula([[:space:]]*#.*)?$/\1/p' "$entry"
+      )"
+    else
+      expected="$name"
+      declarations="$(
+        sed -nE 's/^[[:space:]]*cask[[:space:]]+"([^"]+)"[[:space:]]+do([[:space:]]*#.*)?$/\1/p' "$entry"
+      )"
+    fi
+    declaration_count="$(printf '%s\n' "$declarations" | awk 'NF { count++ } END { print count + 0 }')"
+    declaration="$(printf '%s\n' "$declarations" | awk 'NF { print; exit }')"
+    if [[ "$declaration_count" -ne 1 || "$declaration" != "$expected" ]]; then
+      echo "check-tap-catalog: $directory/$name.rb must declare exactly $expected" >&2
+      mismatch=1
+    fi
+    printf '%s%s\n' "$prefix" "$name" >>"$tmp/actual.raw"
+  done <"$tmp/entries"
+  sort -u "$tmp/actual.raw" >"$tmp/actual"
 
   # Only the leading code token of a list item in this section is a listing.
   awk -v heading="## $section" -v prefix="$prefix" '
-    /^[[:space:]]*(```|~~~)/ {
-      marker = $0
-      sub(/^[[:space:]]*/, "", marker)
-      marker = substr(marker, 1, 3)
-      if (fence == "") fence = marker
-      else if (fence == marker) fence = ""
-      next
+    function fence_run(line,    trimmed, character, count) {
+      trimmed = line
+      sub(/^[[:space:]]*/, "", trimmed)
+      character = substr(trimmed, 1, 1)
+      if (character != "`" && character != "~") return 0
+      count = 1
+      while (substr(trimmed, count + 1, 1) == character) count++
+      return count
     }
-    fence != "" { next }
+    {
+      trimmed = $0
+      sub(/^[[:space:]]*/, "", trimmed)
+      run = fence_run($0)
+      character = substr(trimmed, 1, 1)
+      if (fence_length == 0 && run >= 3) {
+        fence_character = character
+        fence_length = run
+        next
+      }
+      if (fence_length != 0) {
+        remainder = substr(trimmed, run + 1)
+        if (character == fence_character && run >= fence_length && remainder ~ /^[[:space:]]*$/) {
+          fence_character = ""
+          fence_length = 0
+        }
+        next
+      }
+    }
     /^##?[[:space:]]/ {
       section = $0
       sub(/[[:space:]]+$/, "", section)
@@ -59,7 +140,15 @@ for kind in formula cask; do
       name = substr(token, length(prefix) + 1)
       if (name ~ /^[[:alnum:]@+_.-]+$/) print token
     }
-  ' "$readme" | sort -u >"$tmp/listed"
+  ' "$readme" >"$tmp/listed.raw"
+  sort "$tmp/listed.raw" >"$tmp/listed.sorted"
+  uniq -d "$tmp/listed.sorted" >"$tmp/duplicates"
+  sort -u "$tmp/listed.sorted" >"$tmp/listed"
+
+  while IFS= read -r token; do
+    echo "check-tap-catalog: README $section duplicate $kind: $token" >&2
+    mismatch=1
+  done <"$tmp/duplicates"
 
   comm -23 "$tmp/actual" "$tmp/listed" >"$tmp/missing"
   comm -13 "$tmp/actual" "$tmp/listed" >"$tmp/stale"

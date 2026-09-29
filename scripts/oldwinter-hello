@@ -3,13 +3,22 @@ set -euo pipefail
 
 VERSION="0.1.0"
 
-if [[ "${1:-}" == "--version" || "${1:-}" == "-v" ]]; then
-  echo "${VERSION}"
-  exit 0
-fi
-
-if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
-  cat <<'EOF'
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --version|-v)
+      if [[ $# -ne 1 ]]; then
+        echo "--version does not accept arguments" >&2
+        exit 1
+      fi
+      echo "${VERSION}"
+      exit 0
+      ;;
+    --help|-h)
+      if [[ $# -ne 1 ]]; then
+        echo "--help does not accept arguments" >&2
+        exit 1
+      fi
+      cat <<'EOF'
 oldwinter-hello: a demo CLI from oldwinter/tap
 
 Usage:
@@ -17,8 +26,21 @@ Usage:
   oldwinter-hello --version
   oldwinter-hello --help
 EOF
-  exit 0
-fi
+      exit 0
+      ;;
+    --)
+      shift
+      break
+      ;;
+    -*)
+      echo "unknown option: $1" >&2
+      exit 1
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
 
 if [[ $# -gt 0 ]]; then
   echo "Hello, $*!"

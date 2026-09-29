@@ -2,7 +2,16 @@
 # Lock the post-install next step on the Nekong cask.
 set -euo pipefail
 
-root="$(cd "$(dirname "$0")/.." && pwd)"
+resolve_script_path() {
+  local source="${BASH_SOURCE[0]}" directory target
+  while [[ -L "$source" ]]; do
+    directory="$(cd -P "$(dirname "$source")" && pwd)"
+    target="$(readlink "$source")"
+    [[ "$target" == /* ]] && source="$target" || source="$directory/$target"
+  done
+  printf '%s\n' "$source"
+}
+root="$(cd -P "$(dirname "$(resolve_script_path)")/.." && pwd)"
 
 fail() {
   echo "test-nekong-caveats: $1" >&2
@@ -11,7 +20,7 @@ fail() {
 
 has_post_install_next_step() {
   local text
-  text="$(<"$1")"
+  text="$(sed '/^[[:space:]]*#/d' "$1")"
   [[ "$text" == *"caveats"* ]] || return 1
   [[ "$text" == *"open -a Nekong"* ]] || return 1
   [[ "$text" == *"Language"* && "$text" == *"Provider"* && "$text" == *"First workspace"* ]] || return 1
@@ -27,6 +36,16 @@ trap 'rm -rf "$tmp"' EXIT
 printf '%s\n' 'cask "nekong" do' '  app "Nekong.app"' 'end' >"$tmp/nekong.rb"
 if has_post_install_next_step "$tmp/nekong.rb"; then
   fail "cask without caveats should fail"
+fi
+printf '%s\n' \
+  'cask "nekong" do' \
+  '  # caveats' \
+  '  # open -a Nekong' \
+  '  # Language Provider First workspace' \
+  '  # Control-click Open' \
+  'end' >"$tmp/nekong.rb"
+if has_post_install_next_step "$tmp/nekong.rb"; then
+  fail "comment-only caveats should fail"
 fi
 
 echo "test-nekong-caveats: ok"
