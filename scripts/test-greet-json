@@ -28,6 +28,8 @@ version = subprocess.run(
 
 cases = [
     ([], "Hi, friend!"),
+    (["--"], "Hi, friend!"),
+    (["--", "-Ada"], "Hi, -Ada!"),
     (["Ada \"Lovelace\""], 'Hi, Ada "Lovelace"!'),
     ([r"C:\temp"], r"Hi, C:\temp!"),
     (["line1\nline2"], "Hi, line1\nline2!"),
