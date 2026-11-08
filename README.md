@@ -22,6 +22,7 @@ oldwinter-hello --version
 - `oldwinter/tap/all-cli`: inspect and manage common CLI tool contexts
 - `oldwinter/tap/oldwinter-hello`: tap-validation demo CLI
 - `oldwinter/tap/oldwinter-greet`: greeting CLI (`brew install oldwinter/tap/oldwinter-greet`)
+- `oldwinter/tap/vorssaint`: macOS power tools CLI (`brew install --HEAD oldwinter/tap/vorssaint` until the first release; then `brew install oldwinter/tap/vorssaint`)
 
 ## Included Casks
 
